@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="DeleteShield.vcxproj" Id="aa13467a-54f9-4de8-ad4c-fcf66e300e2c" />
+</Solution>
