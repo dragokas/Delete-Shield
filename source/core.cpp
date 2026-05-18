@@ -3,6 +3,7 @@
 #include "file_shield.h"
 #include "process_priority.h"
 #include "process_token.h"
+#include "console.h"
 
 void Core::StartMonitor(const std::wstring& rootDir, 
                         const std::vector<std::wstring>& wildcards)
@@ -11,6 +12,8 @@ void Core::StartMonitor(const std::wstring& rootDir,
     monitor.SetWildcardPatterns(wildcards);
     monitor.SetLockerState(false);
     monitor.Start();
+    Console::WaitKey(VK_ESCAPE);
+    monitor.Stop();
 }
 
 void Core::StartBlocker(const std::wstring& rootDir, 
@@ -20,11 +23,15 @@ void Core::StartBlocker(const std::wstring& rootDir,
     monitor.SetWildcardPatterns(wildcards);
     monitor.SetLockerState(true);
     monitor.Start();
+    Console::WaitKey(VK_ESCAPE);
+    monitor.Stop();
 }
 
-void Core::StartUnloker(const std::wstring& rootDir)
+bool Core::StartUnloker(const std::wstring& rootDir)
 {
-    FileShield::UnlockDirectory(rootDir, true);
+    wprintf(L"Unlocking directory: %s\n", rootDir.c_str());
+    wprintf(L"Note: only locked objects will be handled.\n");
+    return FileShield::UnlockDirectory(rootDir, true);
 }
 
 void Core::SetupPrivileges()

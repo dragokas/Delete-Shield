@@ -72,7 +72,10 @@ int CommandLine::Parse(int argc, wchar_t* argv[])
         {
             wprintf(L"Warning: Wildcards are ignored for unlock operation.\n");
         }
-        Core::StartUnloker(args.path);
+        if (!Core::StartUnloker(args.path))
+        {
+            return 1;
+        }
         break;
         
     default:

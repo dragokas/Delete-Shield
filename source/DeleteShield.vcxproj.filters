@@ -48,7 +48,7 @@
     <ClCompile Include="console_color.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="visual.cpp">
+    <ClCompile Include="console.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="file_info.cpp">
@@ -98,7 +98,7 @@
     <ClInclude Include="console_color.h">
       <Filter>Исходные файлы\Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="visual.h">
+    <ClInclude Include="console.h">
       <Filter>Исходные файлы\Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="file_info.h">

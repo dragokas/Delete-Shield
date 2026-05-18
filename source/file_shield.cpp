@@ -8,7 +8,7 @@
 
 #pragma comment(lib, "Advapi32.lib")
 
-bool FileShield::AddDenyAce(const std::wstring& path, DWORD accessMask, PACL& originalDacl)
+bool FileShield::AddDenyAce(const std::wstring& path, DWORD accessMask, PSECURITY_DESCRIPTOR& originalSD)
 {
     PACL oldDacl = nullptr;
     PSECURITY_DESCRIPTOR sd = nullptr;
@@ -27,7 +27,11 @@ bool FileShield::AddDenyAce(const std::wstring& path, DWORD accessMask, PACL& or
         return false;
     }
 
-    originalDacl = oldDacl;
+    // do not free oldDacl -> it is a part of Security Descriptor
+
+    DWORD size = GetSecurityDescriptorLength(sd);
+    originalSD = LocalAlloc(LPTR, size);
+    memcpy(originalSD, sd, size);
 
     PSID pSid = nullptr;
     if (!ConvertStringSidToSidW(L"S-1-1-0", &pSid)) { // Everyone
@@ -66,7 +70,7 @@ bool FileShield::AddDenyAce(const std::wstring& path, DWORD accessMask, PACL& or
     }
 
     LocalFree(newDacl);
-    LocalFree(sd); // Important: free security descriptor!
+    LocalFree(sd);
 
     return res == ERROR_SUCCESS;
 }
@@ -100,7 +104,7 @@ bool FileShield::ProtectFile(const std::wstring& path)
     {
         LockedFile lf;
         lf.handle = h;
-        _lockedFiles[path] = std::move(lf);  // FIXED: use std::move
+        _lockedFiles[path] = std::move(lf);
         wprintf(isDirectory ? L"[HANDLE LOCK DIR] %s\n" : L"[HANDLE LOCK FILE] %s\n", path.c_str());
         result = true;
     }
@@ -116,9 +120,9 @@ bool FileShield::ProtectFile(const std::wstring& path)
     if (!result)
     {
         LockedFile lf;
-        if (AddDenyAce(path, DELETE, lf.originalDacl))
+        if (AddDenyAce(path, DELETE, lf.originalSD))
         {
-            _lockedFiles[path] = std::move(lf);  // FIXED: use std::move
+            _lockedFiles[path] = std::move(lf);
             wprintf(isDirectory ? L"[ACL LOCK DIR] %s\n" : L"[ACL LOCK FILE] %s\n", path.c_str());
             result = true;
         }
@@ -128,19 +132,18 @@ bool FileShield::ProtectFile(const std::wstring& path)
 
     if (!_lockedDirectories.count(parentDir))
     {
-        PACL dirDacl = nullptr;
-        if (AddDenyAce(parentDir, FILE_DELETE_CHILD, dirDacl))
+        PSECURITY_DESCRIPTOR dirSD = nullptr;
+        if (AddDenyAce(parentDir, FILE_DELETE_CHILD, dirSD))
         {
             LockedFile lf;
-            lf.originalDacl = dirDacl;
-            _lockedDirectories[parentDir] = std::move(lf);  // FIXED: use std::move
+            lf.originalSD = dirSD;
+            _lockedDirectories[parentDir] = std::move(lf);
             wprintf(L"[ACL LOCK DIR] %s\n", parentDir.c_str());
         }
     }
     return result;
 }
 
-// Rest of the file remains the same...
 bool FileShield::UnlockDirectory(std::filesystem::path rootDir, bool recursive)
 {
     bool ret = true;
@@ -267,38 +270,55 @@ bool FileShield::Unlock(const std::wstring& path, const LockedFile& lf)
         result = true;
     }
 
-    if (lf.originalDacl)
+    if (lf.originalSD)
     {
-        if (ERROR_SUCCESS == SetNamedSecurityInfoW(
-            (LPWSTR)path.c_str(),
-            SE_FILE_OBJECT,
-            DACL_SECURITY_INFORMATION,
-            nullptr, nullptr,
-            lf.originalDacl,
-            nullptr))
+        PACL dacl = nullptr;
+        BOOL present = FALSE;
+        BOOL defaulted = FALSE;
+
+        if (GetSecurityDescriptorDacl(lf.originalSD, &present, &dacl, &defaulted))
         {
-            result = true;
+            if (ERROR_SUCCESS == SetNamedSecurityInfoW(
+                (LPWSTR)path.c_str(),
+                SE_FILE_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                nullptr, nullptr,
+                dacl,
+                nullptr))
+            {
+                result = true;
+            }
+            else {
+                wprintf(L"SetNamedSecurityInfoW() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
+            }
         }
         else {
-            wprintf(L"SetNamedSecurityInfoW() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
+            wprintf(L"GetSecurityDescriptorDacl() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
         }
     }
     return result;
 }
 
+bool FileShield::HasLockedObjects()
+{
+    return (_lockedFiles.size() != 0 || _lockedDirectories.size() != 0);
+}
+
 void FileShield::UnlockAll()
 {
-    for (auto& [path, lf] : _lockedFiles)
+    for (const auto& [path, lf] : _lockedFiles)
     {
         Unlock(path, lf);
-        wprintf(L"[UNLOCK] %s\n", path.c_str());
+        wprintf(L"[UNLOCK FILE] %s\n", path.c_str());
     }
 
-    for (auto& [path, lf] : _lockedDirectories)
+    for (const auto& [path, lf] : _lockedDirectories)
     {
         Unlock(path, lf);
-        wprintf(L"[UNLOCK] %s\n", path.c_str());
+        wprintf(L"[UNLOCK DIR] %s\n", path.c_str());
     }
+    
+    wprintf(L"Unlock completed for: %zu files, %zu directories.\n\n", _lockedFiles.size(), _lockedDirectories.size());
 
     _lockedFiles.clear();
     _lockedDirectories.clear();

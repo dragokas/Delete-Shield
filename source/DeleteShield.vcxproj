@@ -144,7 +144,7 @@
     <ClCompile Include="path.cpp" />
     <ClCompile Include="process_priority.cpp" />
     <ClCompile Include="process_token.cpp" />
-    <ClCompile Include="visual.cpp" />
+    <ClCompile Include="console.cpp" />
     <ClCompile Include="wildcard_matcher.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -161,7 +161,7 @@
     <ClInclude Include="process_priority.h" />
     <ClInclude Include="process_token.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="visual.h" />
+    <ClInclude Include="console.h" />
     <ClInclude Include="yield.h" />
     <ClInclude Include="wildcard_matcher.h" />
   </ItemGroup>

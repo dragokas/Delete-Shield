@@ -12,6 +12,6 @@ public:
 	                        const std::vector<std::wstring>& wildcards = {});
 	static void StartBlocker(const std::wstring& rootDir, 
 	                         const std::vector<std::wstring>& wildcards = {});
-	static void StartUnloker(const std::wstring& rootDir);
+	static bool StartUnloker(const std::wstring& rootDir);
 	static void SetupPrivileges();
 };

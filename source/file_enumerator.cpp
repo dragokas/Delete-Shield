@@ -24,9 +24,9 @@ Generator<std::filesystem::path> FileEnumerator::Search(std::filesystem::path ro
                     continue;
                 }
                 if (fs::is_directory(entry.status())) {
-                    dirs.push(entry.path());
                     if (recursive)
                     {
+						dirs.push(entry.path());
                         co_yield entry.path();
                     }
                 }

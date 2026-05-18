@@ -9,10 +9,16 @@ class FileShield
 {
 public:
     FileShield() = default;
-    ~FileShield() { UnlockAll(); }
+    ~FileShield() {
+        if (HasLockedObjects())
+        {
+            UnlockAll();
+        }
+    }
 
     bool ProtectFile(const std::wstring& path);
     void UnlockAll();
+    bool HasLockedObjects();
     static bool UnlockObject(const std::wstring& path);
     static bool UnlockDirectory(std::filesystem::path rootDir, bool recursive);
 
@@ -20,24 +26,30 @@ private:
     struct LockedFile
     {
         HANDLE handle = INVALID_HANDLE_VALUE;
-        PACL originalDacl = nullptr;
+        PSECURITY_DESCRIPTOR originalSD = nullptr;
 
         ~LockedFile()
         {
-            if (handle != INVALID_HANDLE_VALUE)
+            if (handle != INVALID_HANDLE_VALUE) {
                 CloseHandle(handle);
-            if (originalDacl)
-                LocalFree(originalDacl);
+                handle = INVALID_HANDLE_VALUE;
+            }
+            if (originalSD) {
+                LocalFree(originalSD);
+                originalSD = nullptr;
+            }
         }
 
         LockedFile() = default;
+
+        // Block copy-semantics other than std::move
         LockedFile(const LockedFile&) = delete;
         LockedFile& operator=(const LockedFile&) = delete;
         LockedFile(LockedFile&& other) noexcept
-            : handle(other.handle), originalDacl(other.originalDacl)
+            : handle(other.handle), originalSD(other.originalSD)
         {
             other.handle = INVALID_HANDLE_VALUE;
-            other.originalDacl = nullptr;
+            other.originalSD = nullptr;
         }
 
         LockedFile& operator=(LockedFile&& other) noexcept
@@ -45,23 +57,27 @@ private:
             if (this != &other)
             {
                 // Clean up current resources
-                if (handle != INVALID_HANDLE_VALUE)
+                if (handle != INVALID_HANDLE_VALUE) {
                     CloseHandle(handle);
-                if (originalDacl)
-                    LocalFree(originalDacl);
+                    handle = INVALID_HANDLE_VALUE;
+                }
+                if (originalSD) {
+                    LocalFree(originalSD);
+                    originalSD = nullptr;
+                }
 
                 // Move from other
                 handle = other.handle;
-                originalDacl = other.originalDacl;
+                originalSD = other.originalSD;
 
                 other.handle = INVALID_HANDLE_VALUE;
-                other.originalDacl = nullptr;
+                other.originalSD = nullptr;
             }
             return *this;
         }
     };
 
-    bool AddDenyAce(const std::wstring& path, DWORD accessMask, PACL& originalDacl);
+    bool AddDenyAce(const std::wstring& path, DWORD accessMask, PSECURITY_DESCRIPTOR& originalSD);
     bool Unlock(const std::wstring& path, const LockedFile& lf);
 
     std::unordered_map<std::wstring, LockedFile> _lockedFiles;

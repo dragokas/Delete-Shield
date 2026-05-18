@@ -1,16 +1,14 @@
 #include "core.h"
 #include "command_line.h"
 #include "menu.h"
-#include "visual.h"
-
-// TODO:
-// Async I/O
+#include "console.h"
 
 int wmain(int argc, wchar_t* argv[])
 {
     CommandLine::ShowAppName();
-    Visual::SetTitle();
-    Visual::SetIcon();
+    Console::SetUnicode();
+    Console::SetTitle();
+    Console::SetIcon();
 
     Core::SetupPrivileges();
 

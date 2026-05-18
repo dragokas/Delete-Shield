@@ -111,3 +111,11 @@ DeleteShield.exe -u C:\Windows\Temp
 ## Building from sources
 
  - Microsoft Visual Studio 2022 on Windows 10 or newer is required
+
+---
+
+## Contributions
+
+Thanks to following people for making the valuable contributions:
+
+ - my13
