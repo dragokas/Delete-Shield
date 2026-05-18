@@ -30,13 +30,13 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -145,6 +145,7 @@
     <ClCompile Include="process_priority.cpp" />
     <ClCompile Include="process_token.cpp" />
     <ClCompile Include="visual.cpp" />
+    <ClCompile Include="wildcard_matcher.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="command_line.h" />
@@ -162,6 +163,7 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="visual.h" />
     <ClInclude Include="yield.h" />
+    <ClInclude Include="wildcard_matcher.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />

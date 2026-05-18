@@ -66,6 +66,7 @@ bool FileShield::AddDenyAce(const std::wstring& path, DWORD accessMask, PACL& or
     }
 
     LocalFree(newDacl);
+    LocalFree(sd); // Important: free security descriptor!
 
     return res == ERROR_SUCCESS;
 }
@@ -99,12 +100,13 @@ bool FileShield::ProtectFile(const std::wstring& path)
     {
         LockedFile lf;
         lf.handle = h;
-        _lockedFiles[path] = lf;
+        _lockedFiles[path] = std::move(lf);  // FIXED: use std::move
         wprintf(isDirectory ? L"[HANDLE LOCK DIR] %s\n" : L"[HANDLE LOCK FILE] %s\n", path.c_str());
         result = true;
     }
     else {
-        if (GetLastError() != ERROR_SHARING_VIOLATION)
+        DWORD err = GetLastError();
+        if (err != ERROR_SHARING_VIOLATION && err != ERROR_ACCESS_DENIED)
         {
             wprintf(L"CreateFileW() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
         }
@@ -116,7 +118,7 @@ bool FileShield::ProtectFile(const std::wstring& path)
         LockedFile lf;
         if (AddDenyAce(path, DELETE, lf.originalDacl))
         {
-            _lockedFiles[path] = lf;
+            _lockedFiles[path] = std::move(lf);  // FIXED: use std::move
             wprintf(isDirectory ? L"[ACL LOCK DIR] %s\n" : L"[ACL LOCK FILE] %s\n", path.c_str());
             result = true;
         }
@@ -131,13 +133,14 @@ bool FileShield::ProtectFile(const std::wstring& path)
         {
             LockedFile lf;
             lf.originalDacl = dirDacl;
-            _lockedDirectories[parentDir] = lf;
+            _lockedDirectories[parentDir] = std::move(lf);  // FIXED: use std::move
             wprintf(L"[ACL LOCK DIR] %s\n", parentDir.c_str());
         }
     }
     return result;
 }
 
+// Rest of the file remains the same...
 bool FileShield::UnlockDirectory(std::filesystem::path rootDir, bool recursive)
 {
     bool ret = true;
@@ -182,8 +185,6 @@ bool FileShield::UnlockObject(const std::wstring& path)
         return false;
     }
 
-    EXPLICIT_ACCESSW ea = {};
-    DWORD aceCount = 0;
     ACL_SIZE_INFORMATION aclSizeInfo = {};
     if (!GetAclInformation(pOldDACL, &aclSizeInfo, sizeof(ACL_SIZE_INFORMATION), AclSizeInformation)) {
         wprintf(L"GetAclInformation() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
@@ -191,17 +192,17 @@ bool FileShield::UnlockObject(const std::wstring& path)
         return false;
     }
 
-    DWORD newAclSize = aclSizeInfo.AclBytesInUse + sizeof(ACL); // добавляем на всякий случай
-    PACL pNewDACL = (PACL)malloc(newAclSize);
+    DWORD newAclSize = aclSizeInfo.AclBytesInUse + sizeof(ACL);
+    PACL pNewDACL = (PACL)LocalAlloc(LMEM_ZEROINIT, newAclSize);
     if (!pNewDACL) {
-        wprintf(L"GetAclInformation() call failed for ACL size %lu bytes, Error: %lu\n", newAclSize, GetLastError());
+        wprintf(L"LocalAlloc() call failed for ACL size %lu bytes, Error: %lu\n", newAclSize, GetLastError());
         if (pSD) LocalFree(pSD);
         return false;
     }
 
     if (!InitializeAcl(pNewDACL, newAclSize, ACL_REVISION)) {
         wprintf(L"InitializeAcl() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
-        free(pNewDACL);
+        LocalFree(pNewDACL);
         if (pSD) LocalFree(pSD);
         return false;
     }
@@ -216,15 +217,12 @@ bool FileShield::UnlockObject(const std::wstring& path)
                 hasDenyAces = true;
             }
             else {
-                if (pNewDACL != NULL)
+                if (!AddAce(pNewDACL, ACL_REVISION, MAXDWORD, pAce, header->AceSize))
                 {
-                    if (!AddAce(pNewDACL, ACL_REVISION, MAXDWORD, pAce, ((ACCESS_ALLOWED_ACE*)pAce)->Header.AceSize))
-                    {
-                        wprintf(L"AddAce() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
-                        if (pSD) LocalFree(pSD);
-                        if (pNewDACL) free(pNewDACL);
-                        return false;
-                    }
+                    wprintf(L"AddAce() call failed for: %s -> Error: %lu\n", path.c_str(), GetLastError());
+                    LocalFree(pNewDACL);
+                    if (pSD) LocalFree(pSD);
+                    return false;
                 }
             }
         }
@@ -232,8 +230,8 @@ bool FileShield::UnlockObject(const std::wstring& path)
 
     if (!hasDenyAces) // no restrictions found -> just exit
     {
+        LocalFree(pNewDACL);
         if (pSD) LocalFree(pSD);
-        if (pNewDACL) free(pNewDACL);
         return true;
     }
 
@@ -254,8 +252,8 @@ bool FileShield::UnlockObject(const std::wstring& path)
         ret = true;
     }
 
+    LocalFree(pNewDACL);
     if (pSD) LocalFree(pSD);
-    if (pNewDACL) free(pNewDACL);
 
     return ret;
 }
@@ -265,7 +263,7 @@ bool FileShield::Unlock(const std::wstring& path, const LockedFile& lf)
     bool result = false;
 
     if (lf.handle != INVALID_HANDLE_VALUE) {
-        CloseHandle(lf.handle);
+        // Handle will be closed in LockedFile destructor
         result = true;
     }
 
@@ -290,16 +288,16 @@ bool FileShield::Unlock(const std::wstring& path, const LockedFile& lf)
 
 void FileShield::UnlockAll()
 {
-    for (const auto& [path, lf] : _lockedFiles)
+    for (auto& [path, lf] : _lockedFiles)
     {
         Unlock(path, lf);
-        wprintf(L"[UNLOCK FILE] %s\n", path.c_str());
+        wprintf(L"[UNLOCK] %s\n", path.c_str());
     }
 
-    for (const auto& [path, lf] : _lockedDirectories)
+    for (auto& [path, lf] : _lockedDirectories)
     {
         Unlock(path, lf);
-        wprintf(L"[UNLOCK DIR] %s\n", path.c_str());
+        wprintf(L"[UNLOCK] %s\n", path.c_str());
     }
 
     _lockedFiles.clear();

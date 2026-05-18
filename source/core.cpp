@@ -4,16 +4,20 @@
 #include "process_priority.h"
 #include "process_token.h"
 
-void Core::StartMonitor(const std::wstring& rootDir)
+void Core::StartMonitor(const std::wstring& rootDir, 
+                        const std::vector<std::wstring>& wildcards)
 {
     FileMonitor monitor(rootDir);
+    monitor.SetWildcardPatterns(wildcards);
     monitor.SetLockerState(false);
     monitor.Start();
 }
 
-void Core::StartBlocker(const std::wstring& rootDir)
+void Core::StartBlocker(const std::wstring& rootDir, 
+                        const std::vector<std::wstring>& wildcards)
 {
     FileMonitor monitor(rootDir);
+    monitor.SetWildcardPatterns(wildcards);
     monitor.SetLockerState(true);
     monitor.Start();
 }

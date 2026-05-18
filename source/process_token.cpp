@@ -3,6 +3,7 @@
 bool ProcessToken::EnablePrivilege(const std::wstring& privilege)
 {
     HANDLE token = nullptr;
+    bool success = false;
 
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &token))
     {
@@ -10,13 +11,13 @@ bool ProcessToken::EnablePrivilege(const std::wstring& privilege)
         return false;
     }
 
-    TOKEN_PRIVILEGES tp {};
-    LUID luid {};
+    TOKEN_PRIVILEGES tp = {};
+    LUID luid = {};
 
     if (!LookupPrivilegeValueW(nullptr, privilege.c_str(), &luid))
     {
-        CloseHandle(token);
         wprintf(L"LookupPrivilegeValueW() call failed -> Error: %lu\n", GetLastError());
+        CloseHandle(token);
         return false;
     }
 
@@ -24,18 +25,23 @@ bool ProcessToken::EnablePrivilege(const std::wstring& privilege)
     tp.Privileges[0].Luid = luid;
     tp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
 
-    if (!AdjustTokenPrivileges(token,
-        FALSE,
-        &tp,
-        sizeof(tp),
-        nullptr,
-        nullptr) || GetLastError() == ERROR_NOT_ALL_ASSIGNED)
+    if (!AdjustTokenPrivileges(token, FALSE, &tp, sizeof(tp), nullptr, nullptr))
     {
-        CloseHandle(token);
         wprintf(L"AdjustTokenPrivileges() call failed for %s -> Error: %lu\n", privilege.c_str(), GetLastError());
+        CloseHandle(token);
         return false;
     }
-    
+
+    // Check that all privileges were assigned
+    if (GetLastError() == ERROR_NOT_ALL_ASSIGNED)
+    {
+        wprintf(L"Not all privileges were assigned for %s\n", privilege.c_str());
+        CloseHandle(token);
+        return false;
+    }
+
+    success = true;
     CloseHandle(token);
-    return true;
+
+    return success;
 }

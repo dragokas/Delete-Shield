@@ -19,9 +19,15 @@ The utility supports three modes:
 
 | Mode | Description |
 |-----|-------------|
-| `-m` | Monitor directory and display newly created files. |
-| `-b` | Block delete access for newly created files. |
-| `-u` | Remove ACE restrictions. |
+| `-m <path> [wildcards...]` | Monitor directory and display newly created files. |
+| `-b <path> [wildcards...]` | Block delete access for newly created files. |
+| `-u <path>`                | Remove ACE restrictions. |
+
+Wildcard patterns (case-insensitive, supports \* and ?):
+
+- \*.tmp     - all .tmp files
+- test\*.txt - files starting with 'test' and ending with .txt
+- file?.log  - file1.log, file2.log, etc.
 
 ---
 
@@ -34,11 +40,21 @@ Recursively monitor the user's **Temp** directory and print file creation events
 DeleteShield.exe -m "%Temp%"
 ```
 
+Same for .exe and .dll files only:
+```
+DeleteShield.exe -m "%Temp%" *.exe *.dll
+```
+
 ### Block deletion of newly created files
 
 Recursively block delete operations for all newly created files in the user's **Temp** directory:
 ```
 DeleteShield.exe -b "%Temp%"
+```
+
+Same for .exe and .dll files only:
+```
+DeleteShield.exe -b "%Temp%" *.exe *.dll
 ```
 
 ### Remove delete restrictions
@@ -47,6 +63,7 @@ Recursively remove all **Deny ACEs** from files and folders:
 ```
 DeleteShield.exe -u "%Temp%"
 ```
+Wildcards not supported here.
 ---
 
 ## Compatiblity
@@ -70,8 +87,9 @@ Example: Retrieving **Acer** BIOS firmware files from installer.
 1. Download the firmware:  
    [Acer BIOS Downloads](https://www.acer.com/ru-ru/support/product-support/ANV15-51/NH.QN9CD.001/downloads)
 2. Run DeleteShield in **read-only monitoring mode** to observe file creation:  
-   ```cmd
-   DeleteShield.exe -m "C:\"```
+```
+DeleteShield.exe -m "C:\"
+```
 3. Run the firmware installer and watch the console logs to identify which folder needs protection.
 4. In the logs, you possibly can see the entries like:
 ```C:\Windows\Temp\7zS7620.tmp\msvcp90.dll```
@@ -92,4 +110,4 @@ DeleteShield.exe -u C:\Windows\Temp
 
 ## Building from sources
 
- - Microsoft Visual Studio 2026 on Windows 10 or newer is required
+ - Microsoft Visual Studio 2022 on Windows 10 or newer is required

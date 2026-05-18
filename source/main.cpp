@@ -17,6 +17,7 @@ int wmain(int argc, wchar_t* argv[])
     if (argc == 1)
     {
         CommandLine::ShowUsage();
+        wprintf(L"\n");
         return Menu::Show();
     }
 

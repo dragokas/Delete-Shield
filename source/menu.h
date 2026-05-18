@@ -7,4 +7,3 @@ class Menu
 public:
 	static int Show();
 };
-

@@ -1,17 +1,60 @@
 #include "file_monitor.h"
 #include "file_info.h"
 
-#include <unordered_set>
+FileMonitor* FileMonitor::_currentInstance = nullptr;
 
-std::unordered_set<std::wstring> _createdFiles;
+FileMonitor::~FileMonitor()
+{
+    SetConsoleCtrlHandler(nullptr, FALSE);
+    _currentInstance = nullptr;
+}
+
+BOOL WINAPI FileMonitor::ConsoleHandler(DWORD dwCtrlType)
+{
+    if (dwCtrlType == CTRL_C_EVENT || dwCtrlType == CTRL_BREAK_EVENT)
+    {
+        if (_currentInstance)
+        {
+            wprintf(L"\n\n[!] Ctrl+C detected, cleaning up...\n");
+            _currentInstance->Cleanup();
+        }
+        return TRUE;
+    }
+    return FALSE;
+}
 
 void FileMonitor::SetLockerState(bool value)
 {
     _isLockerEnabled = value;
 }
 
+void FileMonitor::SetWildcardPatterns(const std::vector<std::wstring>& patterns)
+{
+    _wildcardMatcher.AddPatterns(patterns);
+}
+
+bool FileMonitor::ShouldProcess(const std::wstring& fullPath) const
+{
+    if (!_wildcardMatcher.HasPatterns())
+        return true;
+    
+    std::filesystem::path p(fullPath);
+    std::wstring basename = p.filename().wstring();
+    return _wildcardMatcher.Matches(basename);
+}
+
+void FileMonitor::Cleanup()
+{
+    _isRunning = false;
+    _FileShield.UnlockAll();
+    _createdFiles.clear();
+}
+
 void FileMonitor::Start()
 {
+    _currentInstance = this;
+    SetConsoleCtrlHandler(ConsoleHandler, TRUE);
+    
     if (!std::filesystem::exists(_rootDir))
     {
         wprintf(L"Directory %s not exists!\n", _rootDir.c_str());
@@ -31,6 +74,11 @@ void FileMonitor::Start()
     {
         wprintf(L"Cannot open directory %s -> Error: %lu\n", _rootDir.c_str(), GetLastError());
         return;
+    }
+
+    if (_wildcardMatcher.HasPatterns())
+    {
+        wprintf(L"Filtering by wildcards (case-insensitive)\n");
     }
 
     if (_isLockerEnabled)
@@ -53,7 +101,7 @@ void FileMonitor::Start()
         notifyFlags += FILE_NOTIFY_CHANGE_SIZE;
     }
 
-    while (true)
+    while (_isRunning)
     {
         if (ReadDirectoryChangesW(
             hDir,
@@ -70,6 +118,11 @@ void FileMonitor::Start()
             {
                 std::wstring name(info->FileName, info->FileNameLength / sizeof(WCHAR));
                 std::wstring fullPath = _rootDir + L"\\" + name;
+                
+                if (!ShouldProcess(fullPath))
+                {
+                    goto next_entry;
+                }
 
                 if (info->Action == FILE_ACTION_ADDED)
                 {
@@ -77,7 +130,6 @@ void FileMonitor::Start()
                     {
                         if (FileInfo::IsDirectory(fullPath))
                         {
-                            //wprintf(L"[CREATED DIR] %s\n", fullPath.c_str());
                             _FileShield.ProtectFile(fullPath);
                         }
                         else {
@@ -86,9 +138,6 @@ void FileMonitor::Start()
                             // If DELETE operation locked, the installer is no longer able to create directory of the same name.
                             // With _createdFiles cache, the DELETE lock is postponed until we receive
                             // the FILE_NOTIFY_CHANGE_SIZE notification.
-                            // * Also, sometimes GetFileSizeEx reports non-zero size of the above dummy file,
-                            // so, the check (size != 0) is not appropriate here
-                            //wprintf(L"[CREATED FILE] %s, size = %llu\n", fullPath.c_str(), FileInfo::GetSize(fullPath));
                             _createdFiles.insert(fullPath);
                         }
                     }
@@ -103,11 +152,11 @@ void FileMonitor::Start()
                     {
                         // Remove from the cache, as we no longer need to receive the event for this file
                         _createdFiles.erase(fullPath);
-                        //wprintf(L"[CHANGE SIZE] %s, size = %llu\n", fullPath.c_str(), FileInfo::GetSize(fullPath));
                         _FileShield.ProtectFile(fullPath);
                     }
                 }
 
+next_entry:
                 if (info->NextEntryOffset == 0)
                 {
                     break;
@@ -117,5 +166,11 @@ void FileMonitor::Start()
         }
     }
 
+    // Cleanup
+    _FileShield.UnlockAll();
+    _createdFiles.clear();
+    
+    SetConsoleCtrlHandler(nullptr, FALSE);
+    _currentInstance = nullptr;
     CloseHandle(hDir);
 }
